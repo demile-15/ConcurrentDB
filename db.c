@@ -131,3 +131,45 @@ node_t *search(char *key, node_t *parent, node_t **parentpp, enum locktype lt) {
     return result;
 }
 
+void db_query(char *key, char *result, int len) {
+    /*
+     * Part 2: Make this thread safe!
+     */
+    lock(l_read, &head.lock);
+    node_t *target = search(key, &head, NULL, l_read);
+    if (target == NULL) {
+        snprintf(result, len, "not found");
+    } else {
+        snprintf(result, len, "%s", target->value);
+        pthread_rwlock_unlock(&target->lock);
+    }
+}
+
+int db_add(char *key, char *value) {
+    /*
+     * Part 2: Make this thread safe!
+     */
+    node_t *parent;
+    node_t *target;
+
+    lock(l_write, &head.lock);
+
+    // First, find the key in the bst. If it already exists, return 0.
+    // The parent is saved to the parent ptr.
+    if ((target = search(key, &head, &parent, l_write)) != NULL) {
+        pthread_rwlock_unlock(&target->lock);
+        pthread_rwlock_unlock(&parent->lock);
+        return 0;
+    }
+    // Else, create a new node and attach it to the left/right of the parent.
+    // The parent is currently locked.
+    node_t *newnode = node_constructor(key, value, NULL, NULL);
+    if (strcmp(key, parent->key) < 0)
+        parent->lchild = newnode;
+    else
+        parent->rchild = newnode;
+    pthread_rwlock_unlock(&parent->lock);
+
+    return 1;
+}
+
