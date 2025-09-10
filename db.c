@@ -94,3 +94,40 @@ void db_cleanup() {
     db_cleanup_recurs(head.rchild);
 }
 
+//------------------------------------------------------------------------------------------------
+// Database modifiers and accessors
+
+node_t *search(char *key, node_t *parent, node_t **parentpp, enum locktype lt) {
+    // parent is locked on entry
+    node_t *next;
+    if (strcmp(key, parent->key) < 0) {
+        next = parent->lchild;
+    } else {
+        next = parent->rchild;
+    }
+
+    node_t *result;
+    if (next == NULL) {
+        result = NULL;
+    } else {
+        lock(lt, &next->lock);
+        if (strcmp(key, next->key) == 0) {
+            result = next;
+        } else {
+            pthread_rwlock_unlock(&parent->lock);
+            return search(key, next, parentpp, lt);
+        }
+    }
+
+    // At the end of the recursive function
+    if (parentpp != NULL) {
+        // parent remains locked
+        *parentpp = parent;
+    } else {
+        // unlock the parent if the function doesn't care about it
+        pthread_rwlock_unlock(&parent->lock);
+    }
+
+    return result;
+}
+
